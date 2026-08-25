@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search } from 'lucide-react';
+import { Search, Database, Layers } from 'lucide-react';
 
 export default function DataExplorer() {
   const [activeBoard, setActiveBoard] = useState('deals');
@@ -21,7 +21,7 @@ export default function DataExplorer() {
   }, []);
 
   if (loading) {
-    return <div className="panel" style={{ padding: '20px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '0.8rem' }}>Loading board records...</div>;
+    return <div className="panel" style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Loading board records...</div>;
   }
 
   const rows = activeBoard === 'deals' ? (data?.deals || []) : (data?.work_orders || []);
@@ -31,44 +31,46 @@ export default function DataExplorer() {
   });
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
       {/* Controls */}
-      <div className="panel" style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-        <div style={{ display: 'flex', gap: '6px' }}>
+      <div className="panel" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '14px' }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
           <button
             id="btn-board-deals"
-            className={`btn ${activeBoard === 'deals' ? 'btn-secondary' : 'btn-ghost'}`}
+            className={`btn ${activeBoard === 'deals' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveBoard('deals')}
-            style={{ fontSize: '0.8rem' }}
+            style={{ fontSize: '0.825rem' }}
           >
-            Deals ({data?.deals_count} records)
+            <Database size={14} />
+            <span>Deals ({data?.deals_count} records)</span>
           </button>
 
           <button
             id="btn-board-wo"
-            className={`btn ${activeBoard === 'work_orders' ? 'btn-secondary' : 'btn-ghost'}`}
+            className={`btn ${activeBoard === 'work_orders' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveBoard('work_orders')}
-            style={{ fontSize: '0.8rem' }}
+            style={{ fontSize: '0.825rem' }}
           >
-            Work Orders ({data?.wo_count} records)
+            <Layers size={14} />
+            <span>Work Orders ({data?.wo_count} records)</span>
           </button>
         </div>
 
         {/* Filter Input */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-app)', padding: '5px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color-subtle)' }}>
-          <Search size={13} color="var(--text-dim)" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-app)', padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+          <Search size={14} color="var(--text-muted)" />
           <input
             id="input-search-board"
             type="text"
-            placeholder="Search records..."
+            placeholder="Filter records..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', fontSize: '0.8rem', outline: 'none', width: '160px' }}
+            style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', fontSize: '0.825rem', outline: 'none', width: '180px' }}
           />
         </div>
       </div>
 
-      {/* Dataset Table */}
+      {/* Table */}
       <div className="panel" style={{ overflowX: 'auto', padding: 0 }}>
         <table className="clean-table">
           <thead>
@@ -101,24 +103,24 @@ export default function DataExplorer() {
               <tr key={idx}>
                 {activeBoard === 'deals' ? (
                   <>
-                    <td style={{ fontWeight: 500 }}>{row.deal_name}</td>
-                    <td><span className="badge badge-neutral">{row.sector}</span></td>
+                    <td style={{ fontWeight: 600 }}>{row.deal_name}</td>
+                    <td><span className="badge badge-cyan">{row.sector}</span></td>
                     <td className="tabular-nums">₹{Number(row.deal_value || 0).toLocaleString()}</td>
                     <td className="tabular-nums">{Math.round((row.closure_probability || 0) * 100)}%</td>
                     <td className="tabular-nums">₹{Number(row.weighted_deal_value || 0).toLocaleString()}</td>
-                    <td><span className="badge badge-neutral">{row.deal_stage}</span></td>
+                    <td><span className="badge badge-amber">{row.deal_stage}</span></td>
                     <td>{row.owner_code}</td>
                     <td>{row.client_code}</td>
                   </>
                 ) : (
                   <>
-                    <td style={{ fontWeight: 500 }}>{row.deal_name}</td>
+                    <td style={{ fontWeight: 600 }}>{row.deal_name}</td>
                     <td>{row.customer_code}</td>
-                    <td><span className="badge badge-neutral">{row.sector}</span></td>
+                    <td><span className="badge badge-cyan">{row.sector}</span></td>
                     <td className="tabular-nums">₹{Number(row.amount_excl_gst || 0).toLocaleString()}</td>
                     <td className="tabular-nums">₹{Number(row.billed_excl_gst || 0).toLocaleString()}</td>
                     <td>
-                      <span className={`badge ${row.billing_status === 'Billed' ? 'badge-success' : row.billing_status === 'Stuck' ? 'badge-warning' : 'badge-neutral'}`}>
+                      <span className={`badge ${row.billing_status === 'Billed' ? 'badge-emerald' : row.billing_status === 'Stuck' ? 'badge-amber' : 'badge-blue'}`}>
                         {row.billing_status}
                       </span>
                     </td>
