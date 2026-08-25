@@ -1,5 +1,6 @@
 import os
 import json
+import requests
 import pandas as pd
 import numpy as np
 from typing import Dict, Any, List, Optional
@@ -19,7 +20,7 @@ class BIAgent:
     Founder-level Business Intelligence Agent.
     Interprets executive queries, joins Deals and Work Orders boards,
     computes key metrics (Revenue, Pipeline Health, Operational Performance, Sector Breakdown),
-    includes data quality caveats, and supports optional LLM AI model synthesis (OpenAI / Gemini).
+    includes data quality caveats, and supports optional AI model synthesis (Google Gemini / OpenAI).
     """
 
     def __init__(self, monday_client: Optional[MondayClient] = None):
@@ -52,12 +53,43 @@ class BIAgent:
         else:
             base_res = self._handle_overview_query(user_query, deals_df, wo_df, all_caveats, data_source)
 
-        # Check for optional OpenAI or Gemini API Key to perform AI Model Synthesis
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if openai_key:
+        # Check for Google Gemini API Key first
+        gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        if gemini_key:
+            try:
+                model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
+                prompt_text = f"""You are an Executive Business Intelligence AI Agent for Skylark Drones.
+The user asked: "{user_query}"
+Here are the exact calculated financial metrics:
+{json.dumps(base_res.get('key_metrics', {}), indent=2)}
+
+Original calculated insights:
+{json.dumps(base_res.get('summary_insights', []), indent=2)}
+
+Please refine these insights into clean bullet points with bold financial figures formatted in Crores (Cr) or Lakhs (L). Return ONLY JSON format like: {{"summary_insights": ["insight 1", "insight 2"]}}."""
+
+                payload = {
+                    "contents": [{"parts": [{"text": prompt_text}]}],
+                    "generationConfig": {"response_mime_type": "application/json"}
+                }
+                headers = {"Content-Type": "application/json"}
+                resp = requests.post(url, json=payload, headers=headers, timeout=10)
+                if resp.status_code == 200:
+                    resp_json = resp.json()
+                    raw_text = resp_json['candidates'][0]['content']['parts'][0]['text']
+                    parsed = json.loads(raw_text)
+                    if "summary_insights" in parsed and isinstance(parsed["summary_insights"], list):
+                        base_res["summary_insights"] = parsed["summary_insights"]
+                        base_res["data_source"] = f"{data_source} + Gemini AI Synthesis"
+            except Exception as e:
+                print("Gemini API fallback to local engine:", e)
+
+        # Fallback check for OpenAI API Key if Gemini is not present
+        elif os.getenv("OPENAI_API_KEY"):
             try:
                 import openai
-                client = openai.OpenAI(api_key=openai_key)
+                client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
                 prompt = f"""You are an Executive Business Intelligence AI Agent for Skylark Drones.
 The user asked: "{user_query}"
 Here are the exact computed financial metrics:
