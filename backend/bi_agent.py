@@ -19,41 +19,58 @@ class BIAgent:
     """
     Founder-level Business Intelligence Agent.
     Interprets executive queries, joins Deals and Work Orders boards,
-    computes key metrics (Revenue, Pipeline Health, Operational Performance, Sector Breakdown),
-    includes data quality caveats, and supports optional AI model synthesis (Google Gemini / OpenAI).
+    handles improper/ambiguous queries gracefully with guidance,
+    implements detailed error handling, and supports optional AI model synthesis (Google Gemini / OpenAI).
     """
 
     def __init__(self, monday_client: Optional[MondayClient] = None):
         self.client = monday_client or MondayClient()
 
     def answer_query(self, user_query: str, deals_board_id: Optional[str] = None, wo_board_id: Optional[str] = None) -> Dict[str, Any]:
-        data = self.client.get_all_data(deals_board_id, wo_board_id)
-        deals_df = data['deals']
-        wo_df = data['work_orders']
-        deals_audit = data['deals_audit']
-        wo_audit = data['work_orders_audit']
-        data_source = data.get('data_source', 'Local Dataset Mirror')
+        # Basic Query Validation
+        if not user_query or not isinstance(user_query, str) or len(user_query.strip()) < 2:
+            return self._handle_improper_query(user_query or "", [], "Data Resilience Engine")
 
-        query_lower = user_query.lower()
+        try:
+            data = self.client.get_all_data(deals_board_id, wo_board_id)
+            deals_df = data['deals']
+            wo_df = data['work_orders']
+            deals_audit = data['deals_audit']
+            wo_audit = data['work_orders_audit']
+            data_source = data.get('data_source', 'Local Dataset Mirror')
+        except Exception as e:
+            return {
+                "query": user_query,
+                "headline": "Data Source Connection Error",
+                "summary_insights": [f"Error loading Monday.com board datasets: {str(e)}"],
+                "key_metrics": {},
+                "chart": None,
+                "caveats": [f"System Error: {type(e).__name__} occurred during data fetch."],
+                "data_source": "Error State",
+                "suggested_followups": ["Retry query", "Check Monday.com API Token"]
+            }
 
-        # Combine caveats
+        query_lower = user_query.strip().lower()
         all_caveats = deals_audit['quality_caveats'] + wo_audit['quality_caveats']
 
-        # Core analytics calculation using Data Resilience Engine
-        if any(w in query_lower for w in ['sector', 'energy', 'mining', 'powerline', 'renewables', 'railways']):
+        # Determine Intent or Handle Out-of-Scope Queries
+        if any(w in query_lower for w in ['sector', 'energy', 'mining', 'powerline', 'renewables', 'railways', 'construction', 'dsp', 'tender']):
             base_res = self._handle_sector_query(user_query, query_lower, deals_df, wo_df, all_caveats, data_source)
-        elif any(w in query_lower for w in ['pipeline', 'stage', 'funnel', 'probability', 'conversion']):
+        elif any(w in query_lower for w in ['pipeline', 'stage', 'funnel', 'probability', 'conversion', 'deal', 'deals']):
             base_res = self._handle_pipeline_query(user_query, deals_df, wo_df, all_caveats, data_source)
-        elif any(w in query_lower for w in ['revenue', 'billing', 'billed', 'collected', 'unbilled', 'receivable', 'money']):
+        elif any(w in query_lower for w in ['revenue', 'billing', 'billed', 'collected', 'unbilled', 'receivable', 'money', 'cash', 'amount', 'po', 'contract']):
             base_res = self._handle_revenue_query(user_query, deals_df, wo_df, all_caveats, data_source)
-        elif any(w in query_lower for w in ['operations', 'operational', 'bottleneck', 'stuck', 'execution', 'software', 'spectra', 'dmo']):
+        elif any(w in query_lower for w in ['operations', 'operational', 'bottleneck', 'stuck', 'execution', 'software', 'spectra', 'dmo', 'project', 'work order', 'wo']):
             base_res = self._handle_operations_query(user_query, wo_df, deals_df, all_caveats, data_source)
-        elif any(w in query_lower for w in ['owner', 'bd', 'kam', 'team', 'personnel', 'rep']):
+        elif any(w in query_lower for w in ['owner', 'bd', 'kam', 'team', 'personnel', 'rep', 'leaderboard', 'sales', 'seller']):
             base_res = self._handle_owner_query(user_query, deals_df, wo_df, all_caveats, data_source)
-        else:
+        elif any(w in query_lower for w in ['summary', 'overview', 'business', 'overall', 'kpi', 'metric', 'performance', 'health', 'dashboard', 'status', 'how', 'what', 'show']):
             base_res = self._handle_overview_query(user_query, deals_df, wo_df, all_caveats, data_source)
+        else:
+            # Handle Improper / Vague / Out-of-Scope Query
+            return self._handle_improper_query(user_query, all_caveats, data_source)
 
-        # Check for Google Gemini API Key first
+        # Check for Google Gemini API Key
         gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
         if gemini_key:
             try:
@@ -85,7 +102,7 @@ Please refine these insights into clean bullet points with bold financial figure
             except Exception as e:
                 print("Gemini API fallback to local engine:", e)
 
-        # Fallback check for OpenAI API Key if Gemini is not present
+        # Fallback check for OpenAI API Key
         elif os.getenv("OPENAI_API_KEY"):
             try:
                 import openai
@@ -113,6 +130,30 @@ Please refine these summary insights into bullet points with bold financial valu
                 print("OpenAI LLM Synthesis fallback to local engine:", e)
 
         return base_res
+
+    def _handle_improper_query(self, original_query: str, caveats: List[str], data_source: str) -> Dict[str, Any]:
+        """Handles ambiguous, gibberish, or out-of-scope queries with helpful guidance."""
+        insights = [
+            f"I specialize in analyzing **Monday.com Business Intelligence** for Skylark Drones.",
+            f"Your query *\"{original_query}\"* appears to be ambiguous or out of scope.",
+            "You can query **Sales Pipeline**, **Revenue & Billing**, **Stuck Work Orders**, **Sector Performance**, or **BD Leaderboards**."
+        ]
+
+        return {
+            "query": original_query,
+            "headline": "Business Intelligence Query Guidance",
+            "summary_insights": insights,
+            "key_metrics": {},
+            "chart": None,
+            "caveats": caveats + ["Query Guidance: Out-of-scope or ambiguous input received."],
+            "data_source": data_source,
+            "suggested_followups": [
+                "What is our overall revenue and billing status?",
+                "How is our pipeline looking for Mining sector?",
+                "Which work orders are currently marked as STUCK?",
+                "How are BD owners performing?"
+            ]
+        }
 
     def _handle_sector_query(self, original_query: str, query_lower: str, deals_df: pd.DataFrame, wo_df: pd.DataFrame, caveats: List[str], data_source: str) -> Dict[str, Any]:
         target_sector = None
