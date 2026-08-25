@@ -1,3 +1,5 @@
+import os
+import json
 import pandas as pd
 import numpy as np
 from typing import Dict, Any, List, Optional
@@ -17,7 +19,7 @@ class BIAgent:
     Founder-level Business Intelligence Agent.
     Interprets executive queries, joins Deals and Work Orders boards,
     computes key metrics (Revenue, Pipeline Health, Operational Performance, Sector Breakdown),
-    includes data quality caveats, and suggests follow-up questions.
+    includes data quality caveats, and supports optional LLM AI model synthesis (OpenAI / Gemini).
     """
 
     def __init__(self, monday_client: Optional[MondayClient] = None):
@@ -36,19 +38,49 @@ class BIAgent:
         # Combine caveats
         all_caveats = deals_audit['quality_caveats'] + wo_audit['quality_caveats']
 
-        # Determine Intent
+        # Core analytics calculation using Data Resilience Engine
         if any(w in query_lower for w in ['sector', 'energy', 'mining', 'powerline', 'renewables', 'railways']):
-            return self._handle_sector_query(user_query, query_lower, deals_df, wo_df, all_caveats, data_source)
+            base_res = self._handle_sector_query(user_query, query_lower, deals_df, wo_df, all_caveats, data_source)
         elif any(w in query_lower for w in ['pipeline', 'stage', 'funnel', 'probability', 'conversion']):
-            return self._handle_pipeline_query(user_query, deals_df, wo_df, all_caveats, data_source)
+            base_res = self._handle_pipeline_query(user_query, deals_df, wo_df, all_caveats, data_source)
         elif any(w in query_lower for w in ['revenue', 'billing', 'billed', 'collected', 'unbilled', 'receivable', 'money']):
-            return self._handle_revenue_query(user_query, deals_df, wo_df, all_caveats, data_source)
+            base_res = self._handle_revenue_query(user_query, deals_df, wo_df, all_caveats, data_source)
         elif any(w in query_lower for w in ['operations', 'operational', 'bottleneck', 'stuck', 'execution', 'software', 'spectra', 'dmo']):
-            return self._handle_operations_query(user_query, wo_df, deals_df, all_caveats, data_source)
+            base_res = self._handle_operations_query(user_query, wo_df, deals_df, all_caveats, data_source)
         elif any(w in query_lower for w in ['owner', 'bd', 'kam', 'team', 'personnel', 'rep']):
-            return self._handle_owner_query(user_query, deals_df, wo_df, all_caveats, data_source)
+            base_res = self._handle_owner_query(user_query, deals_df, wo_df, all_caveats, data_source)
         else:
-            return self._handle_overview_query(user_query, deals_df, wo_df, all_caveats, data_source)
+            base_res = self._handle_overview_query(user_query, deals_df, wo_df, all_caveats, data_source)
+
+        # Check for optional OpenAI or Gemini API Key to perform AI Model Synthesis
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if openai_key:
+            try:
+                import openai
+                client = openai.OpenAI(api_key=openai_key)
+                prompt = f"""You are an Executive Business Intelligence AI Agent for Skylark Drones.
+The user asked: "{user_query}"
+Here are the exact computed financial metrics:
+{json.dumps(base_res.get('key_metrics', {}), indent=2)}
+
+Original calculated insights:
+{json.dumps(base_res.get('summary_insights', []), indent=2)}
+
+Please refine these summary insights into bullet points with bold financial values in Crores (Cr) or Lakhs (L). Return JSON with key "summary_insights" as a list of strings."""
+
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format={"type": "json_object"}
+                )
+                res_content = json.loads(response.choices[0].message.content)
+                if "summary_insights" in res_content and isinstance(res_content["summary_insights"], list):
+                    base_res["summary_insights"] = res_content["summary_insights"]
+                    base_res["data_source"] = f"{data_source} + GPT-4o Synthesis"
+            except Exception as e:
+                print("OpenAI LLM Synthesis fallback to local engine:", e)
+
+        return base_res
 
     def _handle_sector_query(self, original_query: str, query_lower: str, deals_df: pd.DataFrame, wo_df: pd.DataFrame, caveats: List[str], data_source: str) -> Dict[str, Any]:
         target_sector = None
