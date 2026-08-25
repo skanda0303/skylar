@@ -7,6 +7,7 @@ import DataExplorer from './components/DataExplorer';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('chat');
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [config, setConfig] = useState({
     apiToken: '',
     dealsBoardId: '',
@@ -25,7 +26,13 @@ export default function App() {
       <main style={{ flex: 1, padding: '24px 32px', maxWidth: '1280px', margin: '0 auto', width: '100%' }}>
         <MetricsOverview />
 
-        {activeTab === 'chat' && <ChatInterface config={config} />}
+        {activeTab === 'chat' && (
+          <ChatInterface
+            config={config}
+            voiceEnabled={voiceEnabled}
+            setVoiceEnabled={setVoiceEnabled}
+          />
+        )}
         {activeTab === 'leadership' && <LeadershipBuilder config={config} />}
         {activeTab === 'data' && <DataExplorer config={config} />}
       </main>

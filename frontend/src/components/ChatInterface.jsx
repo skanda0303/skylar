@@ -1,15 +1,20 @@
-import React, { useState } from 'react';
-import { Send, CornerDownLeft, Sparkles, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, CornerDownLeft, Sparkles, AlertCircle, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 
-export default function ChatInterface({ config }) {
+export default function ChatInterface({ config, voiceEnabled, setVoiceEnabled }) {
   const [queryInput, setQueryInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speakingIdx, setSpeakingIdx] = useState(null);
+
+  const recognitionRef = useRef(null);
+
   const [messages, setMessages] = useState([
     {
       sender: 'agent',
       headline: 'Executive Business Intelligence Assistant',
       summary_insights: [
-        'Query business performance across Work Orders and Deals boards in real time.',
+        'Query business performance across Work Orders and Deals boards using voice or text.',
         'Data Resilience Engine normalizes missing values, date formats, and sector categories.'
       ],
       key_metrics: {},
@@ -26,9 +31,84 @@ export default function ChatInterface({ config }) {
     }
   ]);
 
+  // Setup Web Speech Recognition
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setQueryInput(transcript);
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+    }
+  }, []);
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) {
+      alert('Speech Recognition is supported in Google Chrome, Edge, and Safari. Please use a supported browser.');
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+    } else {
+      setQueryInput('');
+      recognitionRef.current.start();
+    }
+  };
+
+  // Text-to-Speech Handler
+  const speakText = (text, idx) => {
+    if (!('speechSynthesis' in window)) return;
+
+    window.speechSynthesis.cancel();
+
+    if (speakingIdx === idx) {
+      setSpeakingIdx(null);
+      return;
+    }
+
+    const cleanText = text.replace(/[*_#`~]/g, '');
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    utterance.onend = () => setSpeakingIdx(null);
+    utterance.onerror = () => setSpeakingIdx(null);
+
+    setSpeakingIdx(idx);
+    window.speechSynthesis.speak(utterance);
+  };
+
   const handleSendQuery = async (queryText) => {
     const textToSend = queryText || queryInput;
     if (!textToSend.trim() || loading) return;
+
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
 
     const newMessages = [...messages, { sender: 'user', text: textToSend }];
     setMessages(newMessages);
@@ -47,7 +127,14 @@ export default function ChatInterface({ config }) {
         })
       });
       const data = await res.json();
-      setMessages([...newMessages, { sender: 'agent', ...data }]);
+      const agentMsg = { sender: 'agent', ...data };
+      setMessages([...newMessages, agentMsg]);
+
+      // Auto-speak response if voice enabled
+      if (voiceEnabled && data.summary_insights && data.summary_insights.length > 0) {
+        const fullSpeech = `${data.headline}. ${data.summary_insights.join('. ')}`;
+        speakText(fullSpeech, newMessages.length);
+      }
     } catch (err) {
       setMessages([...newMessages, {
         sender: 'agent',
@@ -93,8 +180,7 @@ export default function ChatInterface({ config }) {
                     width: `${pct}%`,
                     height: '100%',
                     background: idx % 2 === 0 ? 'linear-gradient(90deg, #38bdf8 0%, #3b82f6 100%)' : 'linear-gradient(90deg, #10b981 0%, #06b6d4 100%)',
-                    borderRadius: '3px',
-                    transition: 'width 0.4s ease-out'
+                    borderRadius: '3px'
                   }} />
                 </div>
               </div>
@@ -107,25 +193,39 @@ export default function ChatInterface({ config }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {/* Quick Prompts Bar */}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-        {[
-          "Pipeline by sector",
-          "Revenue & billing status",
-          "Stuck work orders",
-          "BD owner performance",
-          "Probability-weighted pipeline"
-        ].map((prompt, i) => (
-          <button
-            key={i}
-            id={`preset-btn-${i}`}
-            className="btn btn-chip"
-            onClick={() => handleSendQuery(prompt)}
-          >
-            <Sparkles size={13} color="var(--accent-cyan)" />
-            <span>{prompt}</span>
-          </button>
-        ))}
+      {/* Quick Prompts & Voice Controls Bar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {[
+            "Pipeline by sector",
+            "Revenue & billing status",
+            "Stuck work orders",
+            "BD owner performance",
+            "Probability-weighted pipeline"
+          ].map((prompt, i) => (
+            <button
+              key={i}
+              id={`preset-btn-${i}`}
+              className="btn btn-chip"
+              onClick={() => handleSendQuery(prompt)}
+            >
+              <Sparkles size={13} color="var(--accent-cyan)" />
+              <span>{prompt}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Voice Output Toggle Button */}
+        <button
+          id="btn-toggle-voice"
+          className={`btn ${voiceEnabled ? 'btn-secondary' : 'btn-ghost'}`}
+          onClick={() => setVoiceEnabled(!voiceEnabled)}
+          style={{ fontSize: '0.78rem', gap: '6px' }}
+          title="Toggle Auto AI Voice Reading"
+        >
+          {voiceEnabled ? <Volume2 size={14} color="var(--accent-emerald)" /> : <VolumeX size={14} color="var(--text-muted)" />}
+          <span>Voice Output: {voiceEnabled ? 'ON' : 'OFF'}</span>
+        </button>
       </div>
 
       {/* Messages Stream */}
@@ -165,9 +265,23 @@ export default function ChatInterface({ config }) {
               <div className="panel" style={{ padding: '20px', borderLeft: '4px solid var(--accent-cyan)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <h4 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-main)' }}>{msg.headline || 'Summary'}</h4>
-                  {msg.data_source && (
-                    <span className="badge badge-cyan" style={{ fontSize: '0.68rem' }}>{msg.data_source}</span>
-                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {msg.summary_insights && msg.summary_insights.length > 0 && (
+                      <button
+                        id={`btn-read-voice-${idx}`}
+                        className="btn btn-ghost"
+                        onClick={() => speakText(`${msg.headline}. ${msg.summary_insights.join('. ')}`, idx)}
+                        style={{ padding: '4px 8px', fontSize: '0.75rem', color: speakingIdx === idx ? 'var(--accent-emerald)' : 'var(--text-muted)' }}
+                        title="Read Response Out Loud"
+                      >
+                        <Volume2 size={14} />
+                        <span>{speakingIdx === idx ? 'Speaking...' : 'Listen'}</span>
+                      </button>
+                    )}
+                    {msg.data_source && (
+                      <span className="badge badge-cyan" style={{ fontSize: '0.68rem' }}>{msg.data_source}</span>
+                    )}
+                  </div>
                 </div>
 
                 {/* Summary Insights */}
@@ -246,26 +360,44 @@ export default function ChatInterface({ config }) {
         )}
       </div>
 
-      {/* Input Box */}
+      {/* Input Box with Microphone Voice Button */}
       <div className="panel" style={{ padding: '10px', display: 'flex', gap: '10px', alignItems: 'center' }}>
+        {/* Mic Button */}
+        <button
+          id="btn-mic"
+          className={`btn ${isListening ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={toggleListening}
+          style={{
+            padding: '10px 14px',
+            background: isListening ? 'var(--accent-rose)' : 'var(--bg-surface-elevated)',
+            color: '#fff',
+            borderColor: isListening ? 'var(--accent-rose)' : 'var(--border-color)'
+          }}
+          title={isListening ? 'Stop Listening' : 'Click to Speak (Voice Input)'}
+        >
+          {isListening ? <MicOff size={16} /> : <Mic size={16} color="var(--accent-cyan)" />}
+          <span>{isListening ? 'Listening...' : 'Voice'}</span>
+        </button>
+
         <input
           id="input-chat-query"
           type="text"
           value={queryInput}
           onChange={(e) => setQueryInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSendQuery()}
-          placeholder="Ask any executive query (e.g. 'How is Mining pipeline looking?', 'What is unbilled backlog?')..."
+          placeholder={isListening ? 'Listening... Speak your query out loud...' : 'Talk or type your executive query (e.g. "How is Mining pipeline looking?")...'}
           style={{
             flex: 1,
             padding: '10px 14px',
             borderRadius: 'var(--radius-md)',
-            border: '1px solid var(--border-color)',
+            border: isListening ? '1px solid var(--accent-rose)' : '1px solid var(--border-color)',
             background: 'var(--bg-app)',
             color: 'var(--text-main)',
             fontSize: '0.88rem',
             outline: 'none'
           }}
         />
+
         <button
           id="btn-send-query"
           className="btn btn-primary"
