@@ -1,9 +1,12 @@
 import sys
 import os
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
+
+load_dotenv()
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -82,7 +85,7 @@ def get_boards_data(api_token: Optional[str] = None, deals_board_id: Optional[st
         "wo_count": len(wo_records),
         "deals_audit": data['deals_audit'],
         "wo_audit": data['work_orders_audit'],
-        "deals": deals_records[:100], # return first 100 for UI table view
+        "deals": deals_records[:100],
         "work_orders": wo_records[:100]
     }
 

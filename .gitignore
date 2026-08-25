@@ -9,6 +9,8 @@ __pycache__/
 *.pyo
 .pytest_cache/
 *.log
+.env
+.env.*
 
 # ZIP & Screenshots
 *.zip
@@ -19,6 +21,9 @@ ui_antislop_response.png
 ui_minimalist_overview.png
 ui_minimalist_assistant.png
 ui_live_opened.png
+ui_vibrant_overview.png
+ui_vibrant_response.png
+ui_voice_enabled.png
 
 # IDE / System
 .DS_Store
