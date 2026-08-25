@@ -16,6 +16,7 @@ from backend.monday_client import MondayClient
 from backend.bi_agent import BIAgent
 from backend.leadership_updates import LeadershipUpdateGenerator
 from backend.resilience_engine import DataResilienceEngine
+from backend.composio_integration import ComposioIntegration
 
 app = FastAPI(
     title="Skylark Drones - Monday.com Business Intelligence Agent",
@@ -62,12 +63,22 @@ class LeadershipRequest(BaseModel):
     wo_board_id: Optional[str] = None
     api_token: Optional[str] = None
 
+class ComposioSlackRequest(BaseModel):
+    channel: Optional[str] = "executive-alerts"
+    message: str
+
+class ComposioEmailRequest(BaseModel):
+    recipient_email: str
+    subject: str
+    body_markdown: str
+
 @app.get("/api/health")
 def health_check():
     return {
         "status": "healthy",
         "service": "Monday.com BI Agent Backend",
-        "resilience_engine": "Active"
+        "resilience_engine": "Active",
+        "composio_integration": "Ready"
     }
 
 @app.post("/api/query")
@@ -130,6 +141,16 @@ def get_boards_data(api_token: Optional[str] = None, deals_board_id: Optional[st
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Board Data Fetch Error: {str(e)}"
         )
+
+@app.post("/api/composio/slack")
+def dispatch_composio_slack(req: ComposioSlackRequest):
+    composio = ComposioIntegration()
+    return composio.dispatch_slack_alert(req.channel or "executive-alerts", req.message)
+
+@app.post("/api/composio/email")
+def dispatch_composio_email(req: ComposioEmailRequest):
+    composio = ComposioIntegration()
+    return composio.dispatch_email_brief(req.recipient_email, req.subject, req.body_markdown)
 
 if __name__ == "__main__":
     import uvicorn
