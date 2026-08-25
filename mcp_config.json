@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "monday-mcp-server": {
+      "command": "C:\\Users\\night\\anaconda3\\envs\\torch_env\\python.exe",
+      "args": ["monday_mcp_server.py"],
+      "env": {
+        "MONDAY_API_TOKEN": ""
+      }
+    }
+  }
+}

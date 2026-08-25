@@ -1,0 +1,25 @@
+# Node / Vite
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Python / Environment
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.log
+
+# ZIP & Screenshots
+*.zip
+ui_overview.png
+ui_query_response.png
+ui_antislop_overview.png
+ui_antislop_response.png
+ui_minimalist_overview.png
+ui_minimalist_assistant.png
+ui_live_opened.png
+
+# IDE / System
+.DS_Store
+Thumbs.db
